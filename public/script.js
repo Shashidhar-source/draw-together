@@ -68,8 +68,7 @@ function resizeCanvases() {
   canvas.style.height = wrapper.clientHeight + 'px';
   cursorCanvas.style.width = wrapper.clientWidth + 'px';
   cursorCanvas.style.height = wrapper.clientHeight + 'px';
-  ctx.scale(dpr, dpr);
-  cursorCtx.scale(dpr, dpr);
+  applyTransform(ctx);
 }
 
 function getPos(e) {
@@ -96,7 +95,6 @@ function redrawAllStrokes() {
       drawLine(ctx, s);
     }
   }
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 
 function startDraw(e) {
