@@ -6,6 +6,7 @@ const cursorCtx = cursorCanvas.getContext('2d');
 const lobby = document.getElementById('lobby');
 const canvasContainer = document.getElementById('canvas-container');
 const nameInput = document.getElementById('name-input');
+const roomInput = document.getElementById('room-input');
 const joinBtn = document.getElementById('join-btn');
 const roomCode = document.getElementById('room-code');
 const clearBtn = document.getElementById('clear-btn');
@@ -167,13 +168,13 @@ canvas.addEventListener('touchstart', startDraw);
 canvas.addEventListener('touchmove', handleMouseMove);
 canvas.addEventListener('touchend', stopDraw);
 
-function connect(name) {
+function connect(room, name) {
   ws = new WebSocket(BACKEND_URL);
 
   ws.onopen = () => {
     ws.send(JSON.stringify({
       type: 'join',
-      room: '',
+      room,
       color: myColor,
       brushSize: myBrushSize,
       name,
@@ -268,7 +269,8 @@ joinBtn.addEventListener('click', () => {
   myColor = colorPicker.value;
   myBrushSize = parseInt(brushSize.value, 10);
   myName = nameInput.value.trim() || 'Anonymous';
-  connect(myName);
+  const room = roomInput.value.trim().toUpperCase() || '';
+  connect(room, myName);
 });
 
 clearBtn.addEventListener('click', () => {
@@ -284,6 +286,9 @@ leaveBtn.addEventListener('click', disconnect);
 colorPicker.addEventListener('input', () => { myColor = colorPicker.value; });
 brushSize.addEventListener('input', () => { myBrushSize = parseInt(brushSize.value, 10); });
 
+roomInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') joinBtn.click();
+});
 nameInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') joinBtn.click();
 });

@@ -30,6 +30,28 @@ body {
   -webkit-text-fill-color: transparent;
 }
 
+#room-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+#room-input {
+  padding: 10px 16px;
+  border: 2px solid #444;
+  border-radius: 8px;
+  background: #16213e;
+  color: #eee;
+  font-size: 1rem;
+  width: 220px;
+  text-transform: uppercase;
+}
+
+#room-input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
 #join-btn {
   padding: 10px 24px;
   border: none;

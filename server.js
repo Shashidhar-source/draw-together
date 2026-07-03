@@ -28,7 +28,7 @@ wss.on('connection', (ws) => {
 
     switch (msg.type) {
       case 'join': {
-        const room = roomId();
+        const room = msg.room || roomId();
         if (!rooms.has(room)) {
           rooms.set(room, { clients: new Map(), strokes: [] });
         }
