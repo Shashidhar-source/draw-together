@@ -79,6 +79,15 @@ wss.on('connection', (ws) => {
         break;
       }
 
+      case 'fill': {
+        if (!currentRoom) break;
+        const roomData = rooms.get(currentRoom);
+        roomData?.strokes.push({ ...msg });
+        if (roomData?.strokes.length > 10000) roomData.strokes.splice(0, 5000);
+        broadcastToRoom(currentRoom, msg, ws);
+        break;
+      }
+
       case 'clear': {
         if (!currentRoom) break;
         const roomData = rooms.get(currentRoom);

@@ -1,9 +1,9 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-  font-family: system-ui, -apple-system, sans-serif;
-  background: #1a1a2e;
-  color: #eee;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: #0f172a;
+  color: #f8fafc;
   height: 100vh;
   overflow: hidden;
 }
@@ -14,6 +14,7 @@ body {
   height: 100vh;
 }
 
+/* Glassmorphism for lobby */
 #lobby {
   display: flex;
   flex-direction: column;
@@ -22,11 +23,12 @@ body {
   height: 100vh;
   gap: 20px;
   padding: 20px;
+  background: radial-gradient(circle at top right, #1e293b, #0f172a);
 }
 
 #lobby h1 {
   font-size: 2.5rem;
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   text-align: center;
@@ -40,35 +42,51 @@ body {
   justify-content: center;
 }
 
-#room-input {
-  padding: 10px 16px;
-  border: 2px solid #444;
-  border-radius: 8px;
-  background: #16213e;
-  color: #eee;
+/* Modern inputs */
+#room-input, #name-input {
+  padding: 12px 18px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+  border-radius: 12px;
+  color: #fff;
   font-size: 1rem;
-  width: 220px;
+  width: 100%;
+  max-width: 250px;
+  transition: all 0.3s ease;
+}
+
+#room-input {
   text-transform: uppercase;
 }
 
-#room-input:focus {
+#room-input:focus, #name-input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
 }
 
 #join-btn {
-  padding: 10px 24px;
+  padding: 12px 24px;
   border: none;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
   color: #fff;
   font-size: 1rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: transform 0.15s;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-#join-btn:hover { transform: scale(1.03); }
-#join-btn:active { transform: scale(0.97); }
+#join-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+}
+
+#join-btn:active {
+  transform: scale(0.97);
+}
 
 #name-controls {
   display: flex;
@@ -76,21 +94,7 @@ body {
   align-items: center;
   width: 100%;
   max-width: 400px;
-}
-
-#name-input {
-  padding: 10px 16px;
-  border: 2px solid #444;
-  border-radius: 8px;
-  background: #16213e;
-  color: #eee;
-  font-size: 1rem;
-  width: 100%;
-}
-
-#name-input:focus {
-  outline: none;
-  border-color: #667eea;
+  justify-content: center;
 }
 
 #color-picker-container {
@@ -107,7 +111,14 @@ body {
   gap: 8px;
 }
 
-#color-picker { width: 40px; height: 40px; border: none; border-radius: 6px; cursor: pointer; }
+#color-picker { 
+  width: 40px; 
+  height: 40px; 
+  border: none; 
+  border-radius: 6px; 
+  cursor: pointer; 
+  background: transparent;
+}
 #brush-size { cursor: pointer; }
 
 #canvas-container {
@@ -116,49 +127,83 @@ body {
   height: 100vh;
 }
 
-#toolbar {
+/* Toolbar Glassmorphism */
+#toolbar, #zoom-bar, #users-bar, #footer {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
-  background: #16213e;
-  border-bottom: 1px solid #333;
+  padding: 8px 12px;
   flex-wrap: wrap;
 }
 
-#room-label { font-size: 0.85rem; color: #888; margin-right: 4px; }
-#room-label strong { color: #eee; }
+#room-label { font-size: 0.85rem; color: #94a3b8; margin-right: 4px; }
+#room-label strong { color: #f8fafc; }
 
 #tools-group {
   display: flex;
   gap: 2px;
-  background: #0f1a2e;
+  background: rgba(255, 255, 255, 0.05);
   border-radius: 8px;
   padding: 3px;
 }
 
+/* Tool Buttons */
 .tool-btn {
   width: 36px;
   height: 36px;
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #888;
+  color: #94a3b8;
   font-size: 1rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s;
+  transition: all 0.2s ease;
 }
 
-.tool-btn:hover { color: #eee; background: rgba(255,255,255,0.1); }
-.tool-btn.active { background: #667eea; color: #fff; }
+.tool-btn:hover { 
+  background: rgba(255, 255, 255, 0.1); 
+  color: #fff;
+  transform: scale(1.05);
+}
+
+.tool-btn.active { 
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+}
 
 #toolbar-controls {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+#color-presets {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin: 0 4px;
+}
+
+.color-preset {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.color-preset:hover {
+  transform: scale(1.1);
+  border-color: rgba(255, 255, 255, 0.8);
 }
 
 .toolbar-color input {
@@ -168,7 +213,7 @@ body {
   border-radius: 6px;
   cursor: pointer;
   padding: 0;
-  background: none;
+  background: transparent;
 }
 
 .toolbar-size input {
@@ -178,27 +223,37 @@ body {
 
 #size-label {
   font-size: 0.75rem;
-  color: #888;
+  color: #94a3b8;
   min-width: 16px;
   text-align: center;
 }
 
 #toolbar button {
-  padding: 6px 12px;
+  padding: 8px 14px;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s;
 }
 
-#clear-btn { background: #e74c3c; color: #fff; }
-#leave-btn { background: #555; color: #eee; margin-left: auto; }
+#clear-btn { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+#clear-btn:hover { background: #ef4444; color: #fff; }
+
+#leave-btn { background: rgba(255, 255, 255, 0.1); color: #eee; margin-left: auto; }
+#leave-btn:hover { background: rgba(255, 255, 255, 0.2); }
 
 #canvas-wrapper {
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: #fff;
+  background: #ffffff;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #draw-canvas, #cursor-canvas {
@@ -207,117 +262,129 @@ body {
   left: 0;
   width: 100%;
   height: 100%;
+  touch-action: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-#draw-canvas { cursor: crosshair; z-index: 1; touch-action: none; }
-#cursor-canvas { pointer-events: none; z-index: 2; touch-action: none; }
+#draw-canvas { cursor: crosshair; z-index: 1; }
+#cursor-canvas { pointer-events: none; z-index: 2; }
 
 #stroke-tooltip {
   display: none;
   position: absolute;
-  padding: 3px 8px;
-  background: rgba(0, 0, 0, 0.8);
-  color: #fff;
+  padding: 4px 10px;
+  background: rgba(15, 23, 42, 0.9);
+  color: #f8fafc;
   font-size: 12px;
-  border-radius: 4px;
+  font-weight: 500;
+  border-radius: 6px;
   pointer-events: none;
   z-index: 10;
   white-space: nowrap;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
 #zoom-bar {
-  display: flex;
-  align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 4px 10px;
-  background: #16213e;
-  border-top: 1px solid #333;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: none;
 }
 
 #zoom-bar button {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border: none;
-  border-radius: 4px;
-  background: #0f1a2e;
-  color: #ccc;
-  font-size: 1rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #cbd5e1;
+  font-size: 1.1rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.2s;
 }
 
-#zoom-bar button:hover { background: #333; }
-#zoom-level { font-size: 0.75rem; color: #888; min-width: 40px; text-align: center; }
+#zoom-bar button:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
+
+#zoom-slider {
+  width: 80px;
+  cursor: pointer;
+}
+
+#zoom-level { font-size: 0.8rem; color: #94a3b8; min-width: 48px; text-align: center; font-weight: 500; }
 
 #users-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 10px;
-  background: #16213e;
-  border-top: 1px solid #333;
-  font-size: 0.8rem;
-  color: #888;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: none;
+  font-size: 0.85rem;
+  color: #94a3b8;
 }
 
 #user-indicators {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
 .user-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 
 .user-dot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  border: 1px solid #555;
+  border: 2px solid rgba(0,0,0,0.2);
   flex-shrink: 0;
 }
 
 .user-name {
-  font-size: 0.75rem;
-  color: #ccc;
-  max-width: 60px;
+  font-size: 0.8rem;
+  color: #cbd5e1;
+  max-width: 70px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 500;
 }
 
 #footer {
   display: none;
   text-align: center;
-  padding: 4px 12px;
-  font-size: 0.75rem;
-  color: #666;
-  background: #16213e;
-  border-top: 1px solid #333;
-  flex-shrink: 0;
+  justify-content: center;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  color: #64748b;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: none;
 }
 
-#footer strong { color: #888; }
+#footer strong { color: #94a3b8; }
 
+/* Mobile optimizations */
 @media (max-width: 600px) {
-  #lobby h1 { font-size: 1.8rem; }
-  #room-input { width: 160px; font-size: 0.9rem; }
-  #join-btn { font-size: 0.9rem; padding: 8px 16px; }
-  #toolbar { padding: 4px 6px; gap: 4px; }
-  #room-label { font-size: 0.75rem; }
-  .tool-btn { width: 32px; height: 32px; font-size: 0.85rem; }
-  .toolbar-color input { width: 28px; height: 28px; }
-  .toolbar-size input { width: 50px; }
-  #toolbar button { padding: 4px 8px; font-size: 0.75rem; }
-  #zoom-bar button { width: 24px; height: 24px; }
+  #lobby h1 { font-size: 2rem; }
+  #room-input, #name-input { width: 100%; max-width: none; font-size: 1rem; }
+  #join-btn { font-size: 1rem; padding: 12px 20px; width: 100%; }
+  #name-controls, #room-controls { width: 100%; }
+  
+  #toolbar { padding: 6px; gap: 6px; justify-content: center; }
+  #room-label { font-size: 0.8rem; }
+  .tool-btn { width: 34px; height: 34px; font-size: 0.95rem; }
+  .toolbar-color input { width: 30px; height: 30px; }
+  .toolbar-size input { width: 55px; }
+  #toolbar button { padding: 6px 10px; font-size: 0.8rem; }
+  #zoom-bar button { width: 28px; height: 28px; }
+  #zoom-bar { padding: 6px; }
+  #users-bar { padding: 6px; }
 }
 
 @media (min-width: 601px) {
-  #footer { display: block; }
+  #footer { display: flex; }
 }

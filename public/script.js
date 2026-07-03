@@ -22,6 +22,8 @@ const zoomLevel = document.getElementById('zoom-level');
 const zoomIn = document.getElementById('zoom-in');
 const zoomOut = document.getElementById('zoom-out');
 const zoomReset = document.getElementById('zoom-reset');
+const zoomSlider = document.getElementById('zoom-slider');
+const colorPresets = document.querySelectorAll('.color-preset');
 const toolBtns = {
   brush: document.getElementById('tool-brush'),
   eraser: document.getElementById('tool-eraser'),
@@ -57,10 +59,17 @@ function screenToCanvas(sx, sy) {
 function resizeCanvases() {
   const wrapper = document.getElementById('canvas-wrapper');
   if (!wrapper) return;
-  canvas.width = wrapper.clientWidth;
-  canvas.height = wrapper.clientHeight;
-  cursorCanvas.width = wrapper.clientWidth;
-  cursorCanvas.height = wrapper.clientHeight;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = wrapper.clientWidth * dpr;
+  canvas.height = wrapper.clientHeight * dpr;
+  cursorCanvas.width = wrapper.clientWidth * dpr;
+  cursorCanvas.height = wrapper.clientHeight * dpr;
+  canvas.style.width = wrapper.clientWidth + 'px';
+  canvas.style.height = wrapper.clientHeight + 'px';
+  cursorCanvas.style.width = wrapper.clientWidth + 'px';
+  cursorCanvas.style.height = wrapper.clientHeight + 'px';
+  ctx.scale(dpr, dpr);
+  cursorCtx.scale(dpr, dpr);
 }
 
 function getPos(e) {
@@ -68,23 +77,26 @@ function getPos(e) {
   return { x: e.clientX - rect.left, y: e.clientY - rect.top };
 }
 
-function applyTransform() {
-  ctx.translate(vx, vy);
-  ctx.rotate(vrot);
-  ctx.scale(vscale, vscale);
+function applyTransform(context = ctx) {
+  const dpr = window.devicePixelRatio || 1;
+  context.scale(dpr, dpr);
+  context.translate(vx, vy);
+  context.rotate(vrot);
+  context.scale(vscale, vscale);
 }
 
 function redrawAllStrokes() {
-  ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.restore();
-  ctx.save();
-  applyTransform();
+  applyTransform(ctx);
   for (const s of strokes) {
-    drawLine(ctx, s);
+    if (s.type === 'fill') {
+      applyFloodFill(s.logicalX, s.logicalY, s.color);
+    } else {
+      drawLine(ctx, s);
+    }
   }
-  ctx.restore();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 
 function startDraw(e) {
@@ -101,7 +113,12 @@ function startDraw(e) {
   if (activeTool === 'fill') {
     e.preventDefault();
     const c = screenToCanvas(pos.x, pos.y);
-    floodFill(Math.round(c.x), Math.round(c.y), myColor);
+    const data = { type: 'fill', logicalX: c.x, logicalY: c.y, color: myColor };
+    strokes.push(data);
+    applyFloodFill(c.x, c.y, myColor);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(data));
+    }
     return;
   }
   e.preventDefault();
@@ -127,6 +144,20 @@ function startDraw(e) {
   lastX = c.x;
   lastY = c.y;
   tooltipEl.style.display = 'none';
+
+  // Draw a single dot immediately
+  const mode = activeTool === 'eraser' ? 'eraser' : 'brush';
+  const data = {
+    type: 'draw', mode,
+    x0: lastX, y0: lastY,
+    x1: lastX + 0.001, y1: lastY + 0.001,
+    color: myColor, brushSize: myBrushSize, name: myName,
+  };
+  strokes.push(data);
+  drawLine(ctx, data);
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(data));
+  }
 }
 
 function findStrokeAt(mx, my) {
@@ -160,18 +191,19 @@ function handlePointerMove(e) {
     const cx = (p[0].x + p[1].x) / 2;
     const cy = (p[0].y + p[1].y) / 2;
     const oldCx = (p[0].x + (p[1].x - p[0].x) * (1 - dist / lastPinchDist) / 2) + (pos.x - p[0].x) / 2;
-    if (lastPinchDist > 0) {
-      const scaleChange = dist / lastPinchDist;
-      vx = cx - scaleChange * (cx - vx);
-      vy = cy - scaleChange * (cy - vy);
-      vscale *= scaleChange;
-      if (vscale < 0.1) vscale = 0.1;
-      if (vscale > 20) vscale = 20;
-    }
+if (lastPinchDist > 0) {
+        const scaleChange = dist / lastPinchDist;
+        vx = cx - scaleChange * (cx - vx);
+        vy = cy - scaleChange * (cy - vy);
+        vscale *= scaleChange;
+        if (vscale < 0.1) vscale = 0.1;
+        if (vscale > 4) vscale = 4;
+      }
     vrot += angle - lastPinchAngle;
     lastPinchDist = dist;
     lastPinchAngle = angle;
     zoomLevel.textContent = Math.round(vscale * 100) + '%';
+    zoomSlider.value = Math.round(vscale * 100);
     redrawAllStrokes();
     return;
   }
@@ -263,7 +295,7 @@ function updateCursorCanvas() {
   cursorCtx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
   cursorCtx.restore();
   cursorCtx.save();
-  applyTransform();
+  applyTransform(cursorCtx);
   for (const [id, cursor] of Object.entries(remoteCursors)) {
     if (cursor.x < 0 || cursor.y < 0) continue;
     cursorCtx.beginPath();
@@ -278,16 +310,20 @@ function updateCursorCanvas() {
   requestAnimationFrame(updateCursorCanvas);
 }
 
-function floodFill(x, y, fillColor) {
+function floodFillPhysical(x, y, fillColor) {
   const w = canvas.width, h = canvas.height;
+  if (x < 0 || x >= w || y < 0 || y >= h) return;
   const imageData = ctx.getImageData(0, 0, w, h);
   const data = imageData.data;
   const idx = (y * w + x) * 4;
   const targetR = data[idx], targetG = data[idx + 1], targetB = data[idx + 2], targetA = data[idx + 3];
-  const hex = fillColor.replace('#', '');
-  const fillR = parseInt(hex.substring(0, 2), 16);
-  const fillG = parseInt(hex.substring(2, 4), 16);
-  const fillB = parseInt(hex.substring(4, 6), 16);
+  let fillR = 0, fillG = 0, fillB = 0;
+  if (fillColor.startsWith('#')) {
+    const hex = fillColor.replace('#', '');
+    fillR = parseInt(hex.substring(0, 2), 16);
+    fillG = parseInt(hex.substring(2, 4), 16);
+    fillB = parseInt(hex.substring(4, 6), 16);
+  }
   if (targetR === fillR && targetG === fillG && targetB === fillB && targetA === 255) return;
   const visited = new Uint8Array(w * h);
   const stack = [[x, y]];
@@ -297,7 +333,7 @@ function floodFill(x, y, fillColor) {
     const vi = cy * w + cx;
     if (visited[vi]) continue;
     const pi = vi * 4;
-    if (Math.abs(data[pi] - targetR) > 5 || Math.abs(data[pi + 1] - targetG) > 5 || Math.abs(data[pi + 2] - targetB) > 5) continue;
+    if (Math.abs(data[pi] - targetR) > 5 || Math.abs(data[pi + 1] - targetG) > 5 || Math.abs(data[pi + 2] - targetB) > 5 || Math.abs(data[pi + 3] - targetA) > 5) continue;
     visited[vi] = 1;
     data[pi] = fillR;
     data[pi + 1] = fillG;
@@ -306,13 +342,18 @@ function floodFill(x, y, fillColor) {
     stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
   }
   ctx.putImageData(imageData, 0, 0);
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'fill', x, y, color: fillColor }));
-  }
 }
 
-function applyFloodFill(x, y, color) {
-  floodFill(x, y, color);
+function applyFloodFill(logicalX, logicalY, fillColor) {
+  const dpr = window.devicePixelRatio || 1;
+  const cosR = Math.cos(vrot), sinR = Math.sin(vrot);
+  let x1 = logicalX * vscale;
+  let y1 = logicalY * vscale;
+  let x2 = x1 * cosR - y1 * sinR;
+  let y2 = x1 * sinR + y1 * cosR;
+  let px = (x2 + vx) * dpr;
+  let py = (y2 + vy) * dpr;
+  floodFillPhysical(Math.floor(px), Math.floor(py), fillColor);
 }
 
 canvas.addEventListener('pointerdown', startDraw);
@@ -348,7 +389,8 @@ function connect(room, name) {
         drawLine(ctx, msg);
         break;
       case 'fill':
-        applyFloodFill(msg.x, msg.y, msg.color);
+        strokes.push(msg);
+        applyFloodFill(msg.logicalX, msg.logicalY, msg.color);
         break;
       case 'clear':
         strokes = [];
@@ -407,6 +449,7 @@ function disconnect() {
   tooltipEl.style.display = 'none';
   vx = 0; vy = 0; vscale = 1; vrot = 0;
   zoomLevel.textContent = '100%';
+  zoomSlider.value = 100;
   lobby.style.display = 'flex';
   canvasContainer.style.display = 'none';
 }
@@ -456,31 +499,65 @@ toolbarSize.addEventListener('input', () => {
   brushSize.value = myBrushSize;
 });
 
-Object.entries(toolBtns).forEach(([tool, btn]) => {
+colorPresets.forEach(btn => {
   btn.addEventListener('click', () => {
-    activeTool = tool;
-    Object.values(toolBtns).forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    canvas.style.cursor = tool === 'fill' ? 'pointer' : 'crosshair';
+    myColor = btn.getAttribute('data-color');
+    colorPicker.value = myColor;
+    toolbarColor.value = myColor;
   });
 });
 
+document.getElementById('tool-eraser').addEventListener('click', () => {
+  activeTool = 'eraser';
+  Object.values(toolBtns).forEach(b => b.classList.remove('active'));
+  document.getElementById('tool-eraser').classList.add('active');
+  canvas.style.cursor = 'crosshair';
+});
+document.getElementById('tool-brush').addEventListener('click', () => {
+  activeTool = 'brush';
+  Object.values(toolBtns).forEach(b => b.classList.remove('active'));
+  document.getElementById('tool-brush').classList.add('active');
+  canvas.style.cursor = 'crosshair';
+});
+
+document.getElementById('tool-fill').addEventListener('click', () => {
+  activeTool = 'fill';
+  Object.values(toolBtns).forEach(b => b.classList.remove('active'));
+  document.getElementById('tool-fill').classList.add('active');
+  canvas.style.cursor = 'pointer';
+});
+
 zoomIn.addEventListener('click', () => {
-  const cx = canvas.width / 2, cy = canvas.height / 2;
+  const rect = canvas.getBoundingClientRect();
+  const cx = rect.width / 2, cy = rect.height / 2;
   vx = cx - 1.3 * (cx - vx);
   vy = cy - 1.3 * (cy - vy);
   vscale *= 1.3;
-  if (vscale > 20) vscale = 20;
+  if (vscale > 4) vscale = 4;
   zoomLevel.textContent = Math.round(vscale * 100) + '%';
+  zoomSlider.value = Math.round(vscale * 100);
   redrawAllStrokes();
 });
 
 zoomOut.addEventListener('click', () => {
-  const cx = canvas.width / 2, cy = canvas.height / 2;
+  const rect = canvas.getBoundingClientRect();
+  const cx = rect.width / 2, cy = rect.height / 2;
   vx = cx - (1 / 1.3) * (cx - vx);
   vy = cy - (1 / 1.3) * (cy - vy);
   vscale /= 1.3;
   if (vscale < 0.1) vscale = 0.1;
+  zoomLevel.textContent = Math.round(vscale * 100) + '%';
+  zoomSlider.value = Math.round(vscale * 100);
+  redrawAllStrokes();
+});
+
+zoomSlider.addEventListener('input', () => {
+  const rect = canvas.getBoundingClientRect();
+  const cx = rect.width / 2, cy = rect.height / 2;
+  const newScale = parseInt(zoomSlider.value, 10) / 100;
+  vx = cx - (newScale / vscale) * (cx - vx);
+  vy = cy - (newScale / vscale) * (cy - vy);
+  vscale = newScale;
   zoomLevel.textContent = Math.round(vscale * 100) + '%';
   redrawAllStrokes();
 });
@@ -488,6 +565,7 @@ zoomOut.addEventListener('click', () => {
 zoomReset.addEventListener('click', () => {
   vx = 0; vy = 0; vscale = 1; vrot = 0;
   zoomLevel.textContent = '100%';
+  zoomSlider.value = 100;
   redrawAllStrokes();
 });
 
