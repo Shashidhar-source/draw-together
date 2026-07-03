@@ -2,8 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Draw Together</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Draw Together - Real-Time Collaborative Drawing</title>
+  <meta name="description" content="Draw Together is a free real-time collaborative drawing app. Create a room, share the code, and draw with friends live.">
+  <meta name="author" content="Shashidhar Jadimath">
+  <meta name="keywords" content="collaborative drawing, real-time drawing, online whiteboard, draw together, shared canvas">
+  <meta name="google-site-verification" content="pM9eKz2j4Jv1GgDZMYVMLdnwlKSTWw0nNU7nBWzbDt0">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -26,7 +30,17 @@
     <div id="canvas-container" style="display:none">
       <div id="toolbar">
         <span id="room-label">Room: <strong id="room-code"></strong></span>
-        <button id="clear-btn">Clear Canvas</button>
+        <div id="tools-group">
+          <button class="tool-btn active" id="tool-brush" title="Brush">✏️</button>
+          <button class="tool-btn" id="tool-eraser" title="Eraser">🧹</button>
+          <button class="tool-btn" id="tool-fill" title="Fill">🪣</button>
+        </div>
+        <div id="toolbar-controls">
+          <label class="toolbar-color"><input type="color" id="toolbar-color" value="#000000"></label>
+          <label class="toolbar-size"><input type="range" id="toolbar-size" min="1" max="20" value="4"></label>
+          <span id="size-label">4</span>
+        </div>
+        <button id="clear-btn">Clear</button>
         <button id="leave-btn">Leave</button>
       </div>
       <div id="canvas-wrapper">
@@ -34,12 +48,19 @@
         <canvas id="cursor-canvas"></canvas>
         <div id="stroke-tooltip"></div>
       </div>
+      <div id="zoom-bar">
+        <button id="zoom-out">−</button>
+        <span id="zoom-level">100%</span>
+        <button id="zoom-in">+</button>
+        <button id="zoom-reset">↺</button>
+      </div>
       <div id="users-bar">
         <span>Online:</span>
         <div id="user-indicators"></div>
       </div>
     </div>
   </div>
+  <div id="footer">Created by <strong>Shashidhar Jadimath</strong></div>
   <script src="config.js"></script>
   <script src="script.js"></script>
 </body>

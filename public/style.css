@@ -21,19 +21,23 @@ body {
   justify-content: center;
   height: 100vh;
   gap: 20px;
+  padding: 20px;
 }
 
 #lobby h1 {
-  font-size: 3rem;
+  font-size: 2.5rem;
   background: linear-gradient(135deg, #667eea, #764ba2);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  text-align: center;
 }
 
 #room-controls {
   display: flex;
   gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 #room-input {
@@ -70,6 +74,8 @@ body {
   display: flex;
   gap: 10px;
   align-items: center;
+  width: 100%;
+  max-width: 400px;
 }
 
 #name-input {
@@ -79,7 +85,7 @@ body {
   background: #16213e;
   color: #eee;
   font-size: 1rem;
-  width: 280px;
+  width: 100%;
 }
 
 #name-input:focus {
@@ -91,6 +97,8 @@ body {
   display: flex;
   gap: 20px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 #color-picker-container label {
@@ -111,21 +119,76 @@ body {
 #toolbar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 10px 20px;
+  gap: 8px;
+  padding: 6px 10px;
   background: #16213e;
   border-bottom: 1px solid #333;
+  flex-wrap: wrap;
 }
 
-#room-label { font-size: 0.9rem; color: #888; }
+#room-label { font-size: 0.85rem; color: #888; margin-right: 4px; }
 #room-label strong { color: #eee; }
 
-#toolbar button {
-  padding: 6px 16px;
+#tools-group {
+  display: flex;
+  gap: 2px;
+  background: #0f1a2e;
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.tool-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #888;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.tool-btn:hover { color: #eee; background: rgba(255,255,255,0.1); }
+.tool-btn.active { background: #667eea; color: #fff; }
+
+#toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toolbar-color input {
+  width: 32px;
+  height: 32px;
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 0.85rem;
+  padding: 0;
+  background: none;
+}
+
+.toolbar-size input {
+  width: 60px;
+  cursor: pointer;
+}
+
+#size-label {
+  font-size: 0.75rem;
+  color: #888;
+  min-width: 16px;
+  text-align: center;
+}
+
+#toolbar button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
 }
 
 #clear-btn { background: #e74c3c; color: #fff; }
@@ -146,8 +209,8 @@ body {
   height: 100%;
 }
 
-#draw-canvas { cursor: crosshair; z-index: 1; }
-#cursor-canvas { pointer-events: none; z-index: 2; }
+#draw-canvas { cursor: crosshair; z-index: 1; touch-action: none; }
+#cursor-canvas { pointer-events: none; z-index: 2; touch-action: none; }
 
 #stroke-tooltip {
   display: none;
@@ -162,20 +225,47 @@ body {
   white-space: nowrap;
 }
 
+#zoom-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: #16213e;
+  border-top: 1px solid #333;
+}
+
+#zoom-bar button {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: #0f1a2e;
+  color: #ccc;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#zoom-bar button:hover { background: #333; }
+#zoom-level { font-size: 0.75rem; color: #888; min-width: 40px; text-align: center; }
+
 #users-bar {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 20px;
+  padding: 4px 10px;
   background: #16213e;
   border-top: 1px solid #333;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: #888;
 }
 
 #user-indicators {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -186,37 +276,48 @@ body {
 }
 
 .user-dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   border: 1px solid #555;
   flex-shrink: 0;
 }
 
 .user-name {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: #ccc;
-  max-width: 80px;
+  max-width: 60px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.remote-cursor {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 3;
-  transition: left 0.08s linear, top 0.08s linear;
+#footer {
+  display: none;
+  text-align: center;
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  color: #666;
+  background: #16213e;
+  border-top: 1px solid #333;
+  flex-shrink: 0;
 }
 
-.remote-cursor-label {
-  position: absolute;
-  font-size: 11px;
-  white-space: nowrap;
-  pointer-events: none;
-  z-index: 3;
-  transform: translate(12px, -4px);
+#footer strong { color: #888; }
+
+@media (max-width: 600px) {
+  #lobby h1 { font-size: 1.8rem; }
+  #room-input { width: 160px; font-size: 0.9rem; }
+  #join-btn { font-size: 0.9rem; padding: 8px 16px; }
+  #toolbar { padding: 4px 6px; gap: 4px; }
+  #room-label { font-size: 0.75rem; }
+  .tool-btn { width: 32px; height: 32px; font-size: 0.85rem; }
+  .toolbar-color input { width: 28px; height: 28px; }
+  .toolbar-size input { width: 50px; }
+  #toolbar button { padding: 4px 8px; font-size: 0.75rem; }
+  #zoom-bar button { width: 24px; height: 24px; }
+}
+
+@media (min-width: 601px) {
+  #footer { display: block; }
 }

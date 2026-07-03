@@ -15,6 +15,18 @@ const colorPicker = document.getElementById('color-picker');
 const brushSize = document.getElementById('brush-size');
 const userIndicators = document.getElementById('user-indicators');
 const tooltipEl = document.getElementById('stroke-tooltip');
+const toolbarColor = document.getElementById('toolbar-color');
+const toolbarSize = document.getElementById('toolbar-size');
+const sizeLabel = document.getElementById('size-label');
+const zoomLevel = document.getElementById('zoom-level');
+const zoomIn = document.getElementById('zoom-in');
+const zoomOut = document.getElementById('zoom-out');
+const zoomReset = document.getElementById('zoom-reset');
+const toolBtns = {
+  brush: document.getElementById('tool-brush'),
+  eraser: document.getElementById('tool-eraser'),
+  fill: document.getElementById('tool-fill'),
+};
 
 let ws = null;
 let drawing = false;
@@ -26,90 +38,202 @@ let myName = '';
 let currentRoom = null;
 let remoteCursors = {};
 let strokes = [];
+let activeTool = 'brush';
+
+let vx = 0, vy = 0, vscale = 1, vrot = 0;
+let pointers = {};
+let isPinching = false;
+let lastPinchDist = 0;
+let lastPinchAngle = 0;
+let longPressTimer = null;
+let longPressPos = { x: 0, y: 0 };
+
+function screenToCanvas(sx, sy) {
+  const cosR = Math.cos(-vrot), sinR = Math.sin(-vrot);
+  const dx = (sx - vx) / vscale, dy = (sy - vy) / vscale;
+  return { x: dx * cosR - dy * sinR, y: dx * sinR + dy * cosR };
+}
 
 function resizeCanvases() {
   const wrapper = document.getElementById('canvas-wrapper');
   if (!wrapper) return;
-  let prevData = null;
-  if (canvas.width > 0 && canvas.height > 0) {
-    prevData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  }
   canvas.width = wrapper.clientWidth;
   canvas.height = wrapper.clientHeight;
   cursorCanvas.width = wrapper.clientWidth;
   cursorCanvas.height = wrapper.clientHeight;
-  if (prevData) {
-    ctx.putImageData(prevData, 0, 0);
-  }
 }
 
 function getPos(e) {
   const rect = canvas.getBoundingClientRect();
-  const x = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left;
-  const y = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top;
-  return { x, y };
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+function applyTransform() {
+  ctx.translate(vx, vy);
+  ctx.rotate(vrot);
+  ctx.scale(vscale, vscale);
+}
+
+function redrawAllStrokes() {
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
+  ctx.save();
+  applyTransform();
+  for (const s of strokes) {
+    drawLine(ctx, s);
+  }
+  ctx.restore();
 }
 
 function startDraw(e) {
-  e.preventDefault();
-  drawing = true;
+  if (pointers[e.pointerId]) return;
   const pos = getPos(e);
-  lastX = pos.x;
-  lastY = pos.y;
+  pointers[e.pointerId] = { x: pos.x, y: pos.y };
+  if (Object.keys(pointers).length === 2) {
+    const p = Object.values(pointers);
+    lastPinchDist = Math.hypot(p[1].x - p[0].x, p[1].y - p[0].y);
+    lastPinchAngle = Math.atan2(p[1].y - p[0].y, p[1].x - p[0].x);
+    isPinching = true;
+    return;
+  }
+  if (activeTool === 'fill') {
+    e.preventDefault();
+    const c = screenToCanvas(pos.x, pos.y);
+    floodFill(Math.round(c.x), Math.round(c.y), myColor);
+    return;
+  }
+  e.preventDefault();
+  if (isPinching) return;
+
+  if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+  longPressPos = { x: pos.x, y: pos.y };
+  longPressTimer = setTimeout(() => {
+    longPressTimer = null;
+    if (drawing) return;
+    const c = screenToCanvas(longPressPos.x, longPressPos.y);
+    const found = findStrokeAt(c.x, c.y);
+    if (found) {
+      tooltipEl.textContent = found.name || 'Anonymous';
+      tooltipEl.style.display = 'block';
+      tooltipEl.style.left = (longPressPos.x + 12) + 'px';
+      tooltipEl.style.top = (longPressPos.y - 8) + 'px';
+    }
+  }, 500);
+
+  drawing = true;
+  const c = screenToCanvas(pos.x, pos.y);
+  lastX = c.x;
+  lastY = c.y;
   tooltipEl.style.display = 'none';
 }
 
-function handleMouseMove(e) {
-  e.preventDefault();
-  const pos = getPos(e);
-  if (drawing) {
-    const data = {
-      type: 'draw',
-      x0: lastX, y0: lastY,
-      x1: pos.x, y1: pos.y,
-      color: myColor, brushSize: myBrushSize, name: myName,
-    };
-    strokes.push(data);
-    drawLine(ctx, data);
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(data));
+function findStrokeAt(mx, my) {
+  let found = null;
+  let minDist = Infinity;
+  for (const s of strokes) {
+    if (s.mode === 'eraser') continue;
+    const dist = pointToSegmentDist(mx, my, s.x0, s.y0, s.x1, s.y1);
+    const threshold = (s.brushSize || 4) / 2 + 4;
+    if (dist < threshold && dist < minDist) {
+      minDist = dist;
+      found = s;
     }
-    lastX = pos.x;
-    lastY = pos.y;
   }
+  return found;
+}
+
+function handlePointerMove(e) {
+  const pos = getPos(e);
+  if (pointers[e.pointerId]) {
+    pointers[e.pointerId] = { x: pos.x, y: pos.y };
+  }
+  if (longPressTimer && Math.hypot(pos.x - longPressPos.x, pos.y - longPressPos.y) > 10) {
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+  }
+  if (Object.keys(pointers).length === 2 && isPinching) {
+    const p = Object.values(pointers);
+    const dist = Math.hypot(p[1].x - p[0].x, p[1].y - p[0].y);
+    const angle = Math.atan2(p[1].y - p[0].y, p[1].x - p[0].x);
+    const cx = (p[0].x + p[1].x) / 2;
+    const cy = (p[0].y + p[1].y) / 2;
+    const oldCx = (p[0].x + (p[1].x - p[0].x) * (1 - dist / lastPinchDist) / 2) + (pos.x - p[0].x) / 2;
+    if (lastPinchDist > 0) {
+      const scaleChange = dist / lastPinchDist;
+      vx = cx - scaleChange * (cx - vx);
+      vy = cy - scaleChange * (cy - vy);
+      vscale *= scaleChange;
+      if (vscale < 0.1) vscale = 0.1;
+      if (vscale > 20) vscale = 20;
+    }
+    vrot += angle - lastPinchAngle;
+    lastPinchDist = dist;
+    lastPinchAngle = angle;
+    zoomLevel.textContent = Math.round(vscale * 100) + '%';
+    redrawAllStrokes();
+    return;
+  }
+  if (!drawing || isPinching) {
+    if (!isPinching) {
+      const c = screenToCanvas(pos.x, pos.y);
+      checkStrokeHover(c.x, c.y);
+    }
+    return;
+  }
+  e.preventDefault();
+  const c = screenToCanvas(pos.x, pos.y);
+  const mode = activeTool === 'eraser' ? 'eraser' : 'brush';
+  const data = {
+    type: 'draw', mode,
+    x0: lastX, y0: lastY,
+    x1: c.x, y1: c.y,
+    color: myColor, brushSize: myBrushSize, name: myName,
+  };
+  strokes.push(data);
+  drawLine(ctx, data);
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({
-      type: 'cursor', x: pos.x, y: pos.y, color: myColor, name: myName,
-    }));
+    ws.send(JSON.stringify(data));
   }
-  if (!drawing) {
-    checkStrokeHover(pos.x, pos.y);
-  }
+  lastX = c.x;
+  lastY = c.y;
 }
 
 function stopDraw(e) {
+  if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+  delete pointers[e.pointerId];
+  if (Object.keys(pointers).length < 2) {
+    isPinching = false;
+  }
+  if (tooltipEl.style.display === 'block' && !drawing) {
+    tooltipEl.style.display = 'none';
+  }
+  if (!drawing) return;
   drawing = false;
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'cursor', x: -1, y: -1 }));
   }
 }
 
+let strokeCount = 0;
+
 function drawLine(context, data) {
+  if (data.mode === 'eraser' || data.color === 'eraser') {
+    context.globalCompositeOperation = 'destination-out';
+    context.strokeStyle = 'rgba(0,0,0,1)';
+  } else {
+    context.globalCompositeOperation = 'source-over';
+    context.strokeStyle = data.color;
+  }
   context.beginPath();
   context.moveTo(data.x0, data.y0);
   context.lineTo(data.x1, data.y1);
-  context.strokeStyle = data.color;
   context.lineWidth = data.brushSize;
   context.lineCap = 'round';
   context.lineJoin = 'round';
   context.stroke();
-}
-
-function redrawAllStrokes() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  for (const s of strokes) {
-    drawLine(ctx, s);
-  }
+  context.globalCompositeOperation = 'source-over';
 }
 
 function pointToSegmentDist(px, py, x0, y0, x1, y1) {
@@ -122,30 +246,24 @@ function pointToSegmentDist(px, py, x0, y0, x1, y1) {
 }
 
 function checkStrokeHover(mx, my) {
-  let found = null;
-  let minDist = Infinity;
-  for (const s of strokes) {
-    const dist = pointToSegmentDist(mx, my, s.x0, s.y0, s.x1, s.y1);
-    const threshold = (s.brushSize || 4) / 2 + 4;
-    if (dist < threshold && dist < minDist) {
-      minDist = dist;
-      found = s;
-    }
-  }
+  const found = findStrokeAt(mx, my);
   if (found) {
-    const wrapper = document.getElementById('canvas-wrapper');
-    const rect = wrapper.getBoundingClientRect();
     tooltipEl.textContent = found.name || 'Anonymous';
     tooltipEl.style.display = 'block';
-    tooltipEl.style.left = (mx + 12) + 'px';
-    tooltipEl.style.top = (my - 8) + 'px';
+    tooltipEl.style.left = (mx * vscale + vx + 12) + 'px';
+    tooltipEl.style.top = (my * vscale + vy - 8) + 'px';
   } else {
     tooltipEl.style.display = 'none';
   }
 }
 
 function updateCursorCanvas() {
+  cursorCtx.save();
+  cursorCtx.setTransform(1, 0, 0, 1, 0, 0);
   cursorCtx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
+  cursorCtx.restore();
+  cursorCtx.save();
+  applyTransform();
   for (const [id, cursor] of Object.entries(remoteCursors)) {
     if (cursor.x < 0 || cursor.y < 0) continue;
     cursorCtx.beginPath();
@@ -156,31 +274,61 @@ function updateCursorCanvas() {
     cursorCtx.fillStyle = cursor.color;
     cursorCtx.fillText(cursor.name || id.substring(0, 4), cursor.x + 12, cursor.y + 4);
   }
+  cursorCtx.restore();
   requestAnimationFrame(updateCursorCanvas);
 }
 
-canvas.addEventListener('mousedown', startDraw);
-canvas.addEventListener('mousemove', handleMouseMove);
-canvas.addEventListener('mouseup', stopDraw);
-canvas.addEventListener('mouseleave', stopDraw);
+function floodFill(x, y, fillColor) {
+  const w = canvas.width, h = canvas.height;
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const data = imageData.data;
+  const idx = (y * w + x) * 4;
+  const targetR = data[idx], targetG = data[idx + 1], targetB = data[idx + 2], targetA = data[idx + 3];
+  const hex = fillColor.replace('#', '');
+  const fillR = parseInt(hex.substring(0, 2), 16);
+  const fillG = parseInt(hex.substring(2, 4), 16);
+  const fillB = parseInt(hex.substring(4, 6), 16);
+  if (targetR === fillR && targetG === fillG && targetB === fillB && targetA === 255) return;
+  const visited = new Uint8Array(w * h);
+  const stack = [[x, y]];
+  while (stack.length) {
+    const [cx, cy] = stack.pop();
+    if (cx < 0 || cx >= w || cy < 0 || cy >= h) continue;
+    const vi = cy * w + cx;
+    if (visited[vi]) continue;
+    const pi = vi * 4;
+    if (Math.abs(data[pi] - targetR) > 5 || Math.abs(data[pi + 1] - targetG) > 5 || Math.abs(data[pi + 2] - targetB) > 5) continue;
+    visited[vi] = 1;
+    data[pi] = fillR;
+    data[pi + 1] = fillG;
+    data[pi + 2] = fillB;
+    data[pi + 3] = 255;
+    stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
+  }
+  ctx.putImageData(imageData, 0, 0);
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'fill', x, y, color: fillColor }));
+  }
+}
 
-canvas.addEventListener('touchstart', startDraw);
-canvas.addEventListener('touchmove', handleMouseMove);
-canvas.addEventListener('touchend', stopDraw);
+function applyFloodFill(x, y, color) {
+  floodFill(x, y, color);
+}
+
+canvas.addEventListener('pointerdown', startDraw);
+canvas.addEventListener('pointermove', handlePointerMove);
+canvas.addEventListener('pointerup', stopDraw);
+canvas.addEventListener('pointerleave', stopDraw);
+canvas.addEventListener('pointercancel', stopDraw);
 
 function connect(room, name) {
   ws = new WebSocket(BACKEND_URL);
-
   ws.onopen = () => {
     ws.send(JSON.stringify({
-      type: 'join',
-      room,
-      color: myColor,
-      brushSize: myBrushSize,
-      name,
+      type: 'join', room,
+      color: myColor, brushSize: myBrushSize, name,
     }));
   };
-
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
     switch (msg.type) {
@@ -191,22 +339,24 @@ function connect(room, name) {
         canvasContainer.style.display = 'flex';
         resizeCanvases();
         break;
-
       case 'stroke-history':
         strokes = msg.strokes || [];
         redrawAllStrokes();
         break;
-
       case 'draw':
         strokes.push(msg);
         drawLine(ctx, msg);
         break;
-
+      case 'fill':
+        applyFloodFill(msg.x, msg.y, msg.color);
+        break;
       case 'clear':
         strokes = [];
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
         break;
-
       case 'cursor':
         if (msg.x < 0 || msg.y < 0) {
           delete remoteCursors[msg.id];
@@ -214,24 +364,18 @@ function connect(room, name) {
           remoteCursors[msg.id] = { x: msg.x, y: msg.y, color: msg.color, name: msg.name };
         }
         break;
-
       case 'users':
         renderUsers(msg.users);
         break;
-
       case 'user-joined':
         renderUsers(msg.users);
         break;
-
       case 'error':
         alert(msg.message);
         break;
     }
   };
-
-  ws.onclose = () => {
-    disconnect();
-  };
+  ws.onclose = () => { disconnect(); };
 }
 
 function renderUsers(users) {
@@ -252,22 +396,27 @@ function renderUsers(users) {
 }
 
 function disconnect() {
-  if (ws) {
-    ws.close();
-    ws = null;
-  }
+  if (ws) { ws.close(); ws = null; }
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
   currentRoom = null;
   remoteCursors = {};
   strokes = [];
   tooltipEl.style.display = 'none';
+  vx = 0; vy = 0; vscale = 1; vrot = 0;
+  zoomLevel.textContent = '100%';
   lobby.style.display = 'flex';
   canvasContainer.style.display = 'none';
 }
 
 joinBtn.addEventListener('click', () => {
   myColor = colorPicker.value;
+  toolbarColor.value = myColor;
   myBrushSize = parseInt(brushSize.value, 10);
+  toolbarSize.value = myBrushSize;
+  sizeLabel.textContent = myBrushSize;
   myName = nameInput.value.trim() || 'Anonymous';
   const room = roomInput.value.trim().toUpperCase() || '';
   connect(room, myName);
@@ -275,7 +424,10 @@ joinBtn.addEventListener('click', () => {
 
 clearBtn.addEventListener('click', () => {
   strokes = [];
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'clear' }));
   }
@@ -283,16 +435,68 @@ clearBtn.addEventListener('click', () => {
 
 leaveBtn.addEventListener('click', disconnect);
 
-colorPicker.addEventListener('input', () => { myColor = colorPicker.value; });
-brushSize.addEventListener('input', () => { myBrushSize = parseInt(brushSize.value, 10); });
-
-roomInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') joinBtn.click();
+colorPicker.addEventListener('input', () => {
+  myColor = colorPicker.value;
+  toolbarColor.value = myColor;
 });
-nameInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') joinBtn.click();
+brushSize.addEventListener('input', () => {
+  myBrushSize = parseInt(brushSize.value, 10);
+  toolbarSize.value = myBrushSize;
+  sizeLabel.textContent = myBrushSize;
 });
 
-window.addEventListener('resize', resizeCanvases);
+toolbarColor.addEventListener('input', () => {
+  myColor = toolbarColor.value;
+  colorPicker.value = myColor;
+});
+
+toolbarSize.addEventListener('input', () => {
+  myBrushSize = parseInt(toolbarSize.value, 10);
+  sizeLabel.textContent = myBrushSize;
+  brushSize.value = myBrushSize;
+});
+
+Object.entries(toolBtns).forEach(([tool, btn]) => {
+  btn.addEventListener('click', () => {
+    activeTool = tool;
+    Object.values(toolBtns).forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    canvas.style.cursor = tool === 'fill' ? 'pointer' : 'crosshair';
+  });
+});
+
+zoomIn.addEventListener('click', () => {
+  const cx = canvas.width / 2, cy = canvas.height / 2;
+  vx = cx - 1.3 * (cx - vx);
+  vy = cy - 1.3 * (cy - vy);
+  vscale *= 1.3;
+  if (vscale > 20) vscale = 20;
+  zoomLevel.textContent = Math.round(vscale * 100) + '%';
+  redrawAllStrokes();
+});
+
+zoomOut.addEventListener('click', () => {
+  const cx = canvas.width / 2, cy = canvas.height / 2;
+  vx = cx - (1 / 1.3) * (cx - vx);
+  vy = cy - (1 / 1.3) * (cy - vy);
+  vscale /= 1.3;
+  if (vscale < 0.1) vscale = 0.1;
+  zoomLevel.textContent = Math.round(vscale * 100) + '%';
+  redrawAllStrokes();
+});
+
+zoomReset.addEventListener('click', () => {
+  vx = 0; vy = 0; vscale = 1; vrot = 0;
+  zoomLevel.textContent = '100%';
+  redrawAllStrokes();
+});
+
+roomInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinBtn.click(); });
+nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinBtn.click(); });
+
+window.addEventListener('resize', () => {
+  resizeCanvases();
+  if (currentRoom) redrawAllStrokes();
+});
 
 updateCursorCanvas();
