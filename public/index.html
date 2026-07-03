@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draw Together</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <div id="lobby">
+      <h1>Draw Together</h1>
+      <div id="room-controls">
+        <input type="text" id="room-input" placeholder="Room code (or leave blank for new)" maxlength="10">
+        <button id="join-btn">Join / Create Room</button>
+      </div>
+      <div id="backend-config">
+        <label>Server URL: <input type="text" id="backend-url" placeholder="wss://your-backend.com"></label>
+      </div>
+      <div id="color-picker-container">
+        <label>Color: <input type="color" id="color-picker" value="#000000"></label>
+        <label>Brush: <input type="range" id="brush-size" min="1" max="20" value="4"></label>
+      </div>
+    </div>
+
+    <div id="canvas-container" style="display:none">
+      <div id="toolbar">
+        <span id="room-label">Room: <strong id="room-code"></strong></span>
+        <button id="clear-btn">Clear Canvas</button>
+        <button id="leave-btn">Leave</button>
+      </div>
+      <div id="canvas-wrapper">
+        <canvas id="draw-canvas"></canvas>
+        <canvas id="cursor-canvas"></canvas>
+      </div>
+      <div id="users-bar">
+        <span>Online:</span>
+        <div id="user-indicators"></div>
+      </div>
+    </div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
