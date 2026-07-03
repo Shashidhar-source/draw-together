@@ -10,12 +10,12 @@
   <div id="app">
     <div id="lobby">
       <h1>Draw Together</h1>
+      <div id="name-controls">
+        <input type="text" id="name-input" placeholder="Your name" maxlength="20">
+      </div>
       <div id="room-controls">
         <input type="text" id="room-input" placeholder="Room code (or leave blank for new)" maxlength="10">
         <button id="join-btn">Join / Create Room</button>
-      </div>
-      <div id="backend-config">
-        <label>Server URL: <input type="text" id="backend-url" placeholder="wss://your-backend.com"></label>
       </div>
       <div id="color-picker-container">
         <label>Color: <input type="color" id="color-picker" value="#000000"></label>
@@ -39,6 +39,7 @@
       </div>
     </div>
   </div>
+  <script src="config.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

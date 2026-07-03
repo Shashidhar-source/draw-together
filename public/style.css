@@ -66,31 +66,23 @@ body {
 #join-btn:hover { transform: scale(1.03); }
 #join-btn:active { transform: scale(0.97); }
 
-#backend-config {
+#name-controls {
   display: flex;
   gap: 10px;
   align-items: center;
 }
 
-#backend-config label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.85rem;
-  color: #888;
-}
-
-#backend-url {
-  padding: 6px 12px;
+#name-input {
+  padding: 10px 16px;
   border: 2px solid #444;
-  border-radius: 6px;
+  border-radius: 8px;
   background: #16213e;
   color: #eee;
-  font-size: 0.85rem;
+  font-size: 1rem;
   width: 280px;
 }
 
-#backend-url:focus {
+#name-input:focus {
   outline: none;
   border-color: #667eea;
 }
@@ -170,15 +162,31 @@ body {
 
 #user-indicators {
   display: flex;
-  gap: 6px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
+.user-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .user-dot {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  border: 2px solid #555;
+  border: 1px solid #555;
+  flex-shrink: 0;
+}
+
+.user-name {
+  font-size: 0.8rem;
+  color: #ccc;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .remote-cursor {

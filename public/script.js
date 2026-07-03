@@ -5,6 +5,7 @@ const cursorCtx = cursorCanvas.getContext('2d');
 
 const lobby = document.getElementById('lobby');
 const canvasContainer = document.getElementById('canvas-container');
+const nameInput = document.getElementById('name-input');
 const roomInput = document.getElementById('room-input');
 const joinBtn = document.getElementById('join-btn');
 const roomCode = document.getElementById('room-code');
@@ -20,6 +21,7 @@ let lastX = 0;
 let lastY = 0;
 let myColor = '#000000';
 let myBrushSize = 4;
+let myName = '';
 let currentRoom = null;
 let remoteCursors = {};
 
@@ -65,6 +67,7 @@ function draw(e) {
       y1: pos.y,
       color: myColor,
       brushSize: myBrushSize,
+      name: myName,
     };
     drawLine(ctx, data);
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -79,6 +82,7 @@ function draw(e) {
       x: pos.x,
       y: pos.y,
       color: myColor,
+      name: myName,
     }));
   }
 }
@@ -113,9 +117,9 @@ function updateCursorCanvas() {
     cursorCtx.arc(cursor.x, cursor.y, 5, 0, Math.PI * 2);
     cursorCtx.fillStyle = cursor.color;
     cursorCtx.fill();
-    cursorCtx.font = '11px system-ui, sans-serif';
+    cursorCtx.font = 'bold 11px system-ui, sans-serif';
     cursorCtx.fillStyle = cursor.color;
-    cursorCtx.fillText(id.substring(0, 4), cursor.x + 12, cursor.y + 4);
+    cursorCtx.fillText(cursor.name || id.substring(0, 4), cursor.x + 12, cursor.y + 4);
   }
   requestAnimationFrame(updateCursorCanvas);
 }
@@ -129,10 +133,8 @@ canvas.addEventListener('touchstart', startDraw);
 canvas.addEventListener('touchmove', draw);
 canvas.addEventListener('touchend', stopDraw);
 
-function connect(room, color, size) {
-  const backendUrl = document.getElementById('backend-url').value.trim() || localStorage.getItem('backendUrl') || 'ws://localhost:3000';
-  localStorage.setItem('backendUrl', backendUrl);
-  ws = new WebSocket(backendUrl);
+function connect(room, color, size, name) {
+  ws = new WebSocket(BACKEND_URL);
 
   ws.onopen = () => {
     ws.send(JSON.stringify({
@@ -140,6 +142,7 @@ function connect(room, color, size) {
       room,
       color,
       brushSize: size,
+      name,
     }));
   };
 
@@ -166,7 +169,7 @@ function connect(room, color, size) {
         if (msg.x < 0 || msg.y < 0) {
           delete remoteCursors[msg.id];
         } else {
-          remoteCursors[msg.id] = { x: msg.x, y: msg.y, color: msg.color };
+          remoteCursors[msg.id] = { x: msg.x, y: msg.y, color: msg.color, name: msg.name };
         }
         break;
 
@@ -188,11 +191,17 @@ function connect(room, color, size) {
 function renderUsers(users) {
   userIndicators.innerHTML = '';
   users.forEach((u) => {
-    const dot = document.createElement('div');
+    const item = document.createElement('div');
+    item.className = 'user-item';
+    const dot = document.createElement('span');
     dot.className = 'user-dot';
     dot.style.background = u.color;
-    dot.title = `User ${u.id}`;
-    userIndicators.appendChild(dot);
+    item.appendChild(dot);
+    const label = document.createElement('span');
+    label.className = 'user-name';
+    label.textContent = u.name || 'Anonymous';
+    item.appendChild(label);
+    userIndicators.appendChild(item);
   });
 }
 
@@ -211,8 +220,9 @@ function disconnect() {
 joinBtn.addEventListener('click', () => {
   myColor = colorPicker.value;
   myBrushSize = parseInt(brushSize.value, 10);
+  myName = nameInput.value.trim() || 'Anonymous';
   const room = roomInput.value.trim().toUpperCase() || '';
-  connect(room, myColor, myBrushSize);
+  connect(room, myColor, myBrushSize, myName);
 });
 
 clearBtn.addEventListener('click', () => {
@@ -228,6 +238,9 @@ colorPicker.addEventListener('input', () => { myColor = colorPicker.value; });
 brushSize.addEventListener('input', () => { myBrushSize = parseInt(brushSize.value, 10); });
 
 roomInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') joinBtn.click();
+});
+nameInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') joinBtn.click();
 });
 

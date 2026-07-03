@@ -38,13 +38,14 @@ wss.on('connection', (ws) => {
         }
         currentRoom = room;
         const clients = rooms.get(room);
-        clients.set(ws, { color: msg.color || '#000000', brushSize: msg.brushSize || 4 });
+        clients.set(ws, { color: msg.color || '#000000', brushSize: msg.brushSize || 4, name: msg.name || 'Anonymous' });
 
         ws.send(JSON.stringify({ type: 'joined', room }));
 
         const userList = Array.from(clients.entries()).map(([c, u]) => ({
           color: u.color,
           brushSize: u.brushSize,
+          name: u.name,
           id: c._id || (c._id = Math.random().toString(36).substring(2, 8)),
         }));
         broadcastToRoom(room, {
@@ -61,6 +62,8 @@ wss.on('connection', (ws) => {
 
       case 'draw': {
         if (!currentRoom) break;
+        const drawer = rooms.get(currentRoom)?.get(ws);
+        msg.name = drawer?.name || 'Anonymous';
         broadcastToRoom(currentRoom, msg, ws);
         break;
       }
@@ -73,7 +76,9 @@ wss.on('connection', (ws) => {
 
       case 'cursor': {
         if (!currentRoom) break;
+        const cursorUser = rooms.get(currentRoom)?.get(ws);
         msg.id = ws._id;
+        msg.name = cursorUser?.name || 'Anonymous';
         broadcastToRoom(currentRoom, msg, ws);
         break;
       }
@@ -90,6 +95,7 @@ wss.on('connection', (ws) => {
         const userList = Array.from(clients.entries()).map(([c, u]) => ({
           color: u.color,
           brushSize: u.brushSize,
+          name: u.name,
           id: c._id || (c._id = Math.random().toString(36).substring(2, 8)),
         }));
         broadcastToRoom(currentRoom, {
