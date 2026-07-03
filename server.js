@@ -28,19 +28,27 @@ wss.on('connection', (ws) => {
 
     switch (msg.type) {
       case 'join': {
-        const room = msg.room || roomId();
+        const room = roomId();
         if (!rooms.has(room)) {
-          rooms.set(room, new Map());
+          rooms.set(room, { clients: new Map(), strokes: [] });
+        }
+        const roomData = rooms.get(room);
+        if (roomData.clients.size >= 50) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Room full (max 50)' }));
+          break;
         }
         if (currentRoom) {
           const prev = rooms.get(currentRoom);
-          if (prev) prev.delete(ws);
+          if (prev) prev.clients.delete(ws);
         }
         currentRoom = room;
-        const clients = rooms.get(room);
+        const clients = roomData.clients;
         clients.set(ws, { color: msg.color || '#000000', brushSize: msg.brushSize || 4, name: msg.name || 'Anonymous' });
 
         ws.send(JSON.stringify({ type: 'joined', room }));
+        if (roomData.strokes.length > 0) {
+          ws.send(JSON.stringify({ type: 'stroke-history', strokes: roomData.strokes }));
+        }
 
         const userList = Array.from(clients.entries()).map(([c, u]) => ({
           color: u.color,
@@ -62,21 +70,26 @@ wss.on('connection', (ws) => {
 
       case 'draw': {
         if (!currentRoom) break;
-        const drawer = rooms.get(currentRoom)?.get(ws);
+        const roomData = rooms.get(currentRoom);
+        const drawer = roomData?.clients.get(ws);
         msg.name = drawer?.name || 'Anonymous';
+        roomData?.strokes.push({ ...msg });
+        if (roomData?.strokes.length > 10000) roomData.strokes.splice(0, 5000);
         broadcastToRoom(currentRoom, msg, ws);
         break;
       }
 
       case 'clear': {
         if (!currentRoom) break;
+        const roomData = rooms.get(currentRoom);
+        if (roomData) roomData.strokes = [];
         broadcastToRoom(currentRoom, { type: 'clear' }, null);
         break;
       }
 
       case 'cursor': {
         if (!currentRoom) break;
-        const cursorUser = rooms.get(currentRoom)?.get(ws);
+        const cursorUser = rooms.get(currentRoom)?.clients.get(ws);
         msg.id = ws._id;
         msg.name = cursorUser?.name || 'Anonymous';
         broadcastToRoom(currentRoom, msg, ws);
@@ -87,12 +100,12 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     if (currentRoom && rooms.has(currentRoom)) {
-      const clients = rooms.get(currentRoom);
-      clients.delete(ws);
-      if (clients.size === 0) {
+      const roomData = rooms.get(currentRoom);
+      roomData.clients.delete(ws);
+      if (roomData.clients.size === 0) {
         rooms.delete(currentRoom);
       } else {
-        const userList = Array.from(clients.entries()).map(([c, u]) => ({
+        const userList = Array.from(roomData.clients.entries()).map(([c, u]) => ({
           color: u.color,
           brushSize: u.brushSize,
           name: u.name,
@@ -108,10 +121,10 @@ wss.on('connection', (ws) => {
 });
 
 function broadcastToRoom(room, msg, exclude) {
-  const clients = rooms.get(room);
-  if (!clients) return;
+  const roomData = rooms.get(room);
+  if (!roomData) return;
   const data = JSON.stringify(msg);
-  for (const [client] of clients) {
+  for (const [client] of roomData.clients) {
     if (client !== exclude && client.readyState === 1) {
       client.send(data);
     }

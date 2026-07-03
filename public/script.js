@@ -6,7 +6,6 @@ const cursorCtx = cursorCanvas.getContext('2d');
 const lobby = document.getElementById('lobby');
 const canvasContainer = document.getElementById('canvas-container');
 const nameInput = document.getElementById('name-input');
-const roomInput = document.getElementById('room-input');
 const joinBtn = document.getElementById('join-btn');
 const roomCode = document.getElementById('room-code');
 const clearBtn = document.getElementById('clear-btn');
@@ -14,6 +13,7 @@ const leaveBtn = document.getElementById('leave-btn');
 const colorPicker = document.getElementById('color-picker');
 const brushSize = document.getElementById('brush-size');
 const userIndicators = document.getElementById('user-indicators');
+const tooltipEl = document.getElementById('stroke-tooltip');
 
 let ws = null;
 let drawing = false;
@@ -24,9 +24,11 @@ let myBrushSize = 4;
 let myName = '';
 let currentRoom = null;
 let remoteCursors = {};
+let strokes = [];
 
 function resizeCanvases() {
   const wrapper = document.getElementById('canvas-wrapper');
+  if (!wrapper) return;
   let prevData = null;
   if (canvas.width > 0 && canvas.height > 0) {
     prevData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -53,22 +55,20 @@ function startDraw(e) {
   const pos = getPos(e);
   lastX = pos.x;
   lastY = pos.y;
+  tooltipEl.style.display = 'none';
 }
 
-function draw(e) {
+function handleMouseMove(e) {
   e.preventDefault();
   const pos = getPos(e);
   if (drawing) {
     const data = {
       type: 'draw',
-      x0: lastX,
-      y0: lastY,
-      x1: pos.x,
-      y1: pos.y,
-      color: myColor,
-      brushSize: myBrushSize,
-      name: myName,
+      x0: lastX, y0: lastY,
+      x1: pos.x, y1: pos.y,
+      color: myColor, brushSize: myBrushSize, name: myName,
     };
+    strokes.push(data);
     drawLine(ctx, data);
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(data));
@@ -78,12 +78,11 @@ function draw(e) {
   }
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({
-      type: 'cursor',
-      x: pos.x,
-      y: pos.y,
-      color: myColor,
-      name: myName,
+      type: 'cursor', x: pos.x, y: pos.y, color: myColor, name: myName,
     }));
+  }
+  if (!drawing) {
+    checkStrokeHover(pos.x, pos.y);
   }
 }
 
@@ -105,8 +104,43 @@ function drawLine(context, data) {
   context.stroke();
 }
 
-function applyRemoteDraw(data) {
-  drawLine(ctx, data);
+function redrawAllStrokes() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (const s of strokes) {
+    drawLine(ctx, s);
+  }
+}
+
+function pointToSegmentDist(px, py, x0, y0, x1, y1) {
+  const dx = x1 - x0, dy = y1 - y0;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return Math.hypot(px - x0, py - y0);
+  let t = ((px - x0) * dx + (py - y0) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x0 + t * dx), py - (y0 + t * dy));
+}
+
+function checkStrokeHover(mx, my) {
+  let found = null;
+  let minDist = Infinity;
+  for (const s of strokes) {
+    const dist = pointToSegmentDist(mx, my, s.x0, s.y0, s.x1, s.y1);
+    const threshold = (s.brushSize || 4) / 2 + 4;
+    if (dist < threshold && dist < minDist) {
+      minDist = dist;
+      found = s;
+    }
+  }
+  if (found) {
+    const wrapper = document.getElementById('canvas-wrapper');
+    const rect = wrapper.getBoundingClientRect();
+    tooltipEl.textContent = found.name || 'Anonymous';
+    tooltipEl.style.display = 'block';
+    tooltipEl.style.left = (mx + 12) + 'px';
+    tooltipEl.style.top = (my - 8) + 'px';
+  } else {
+    tooltipEl.style.display = 'none';
+  }
 }
 
 function updateCursorCanvas() {
@@ -125,23 +159,23 @@ function updateCursorCanvas() {
 }
 
 canvas.addEventListener('mousedown', startDraw);
-canvas.addEventListener('mousemove', draw);
+canvas.addEventListener('mousemove', handleMouseMove);
 canvas.addEventListener('mouseup', stopDraw);
 canvas.addEventListener('mouseleave', stopDraw);
 
 canvas.addEventListener('touchstart', startDraw);
-canvas.addEventListener('touchmove', draw);
+canvas.addEventListener('touchmove', handleMouseMove);
 canvas.addEventListener('touchend', stopDraw);
 
-function connect(room, color, size, name) {
+function connect(name) {
   ws = new WebSocket(BACKEND_URL);
 
   ws.onopen = () => {
     ws.send(JSON.stringify({
       type: 'join',
-      room,
-      color,
-      brushSize: size,
+      room: '',
+      color: myColor,
+      brushSize: myBrushSize,
       name,
     }));
   };
@@ -157,11 +191,18 @@ function connect(room, color, size, name) {
         resizeCanvases();
         break;
 
+      case 'stroke-history':
+        strokes = msg.strokes || [];
+        redrawAllStrokes();
+        break;
+
       case 'draw':
-        applyRemoteDraw(msg);
+        strokes.push(msg);
+        drawLine(ctx, msg);
         break;
 
       case 'clear':
+        strokes = [];
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         break;
 
@@ -179,6 +220,10 @@ function connect(room, color, size, name) {
 
       case 'user-joined':
         renderUsers(msg.users);
+        break;
+
+      case 'error':
+        alert(msg.message);
         break;
     }
   };
@@ -213,6 +258,8 @@ function disconnect() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   currentRoom = null;
   remoteCursors = {};
+  strokes = [];
+  tooltipEl.style.display = 'none';
   lobby.style.display = 'flex';
   canvasContainer.style.display = 'none';
 }
@@ -221,11 +268,11 @@ joinBtn.addEventListener('click', () => {
   myColor = colorPicker.value;
   myBrushSize = parseInt(brushSize.value, 10);
   myName = nameInput.value.trim() || 'Anonymous';
-  const room = roomInput.value.trim().toUpperCase() || '';
-  connect(room, myColor, myBrushSize, myName);
+  connect(myName);
 });
 
 clearBtn.addEventListener('click', () => {
+  strokes = [];
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'clear' }));
@@ -237,9 +284,6 @@ leaveBtn.addEventListener('click', disconnect);
 colorPicker.addEventListener('input', () => { myColor = colorPicker.value; });
 brushSize.addEventListener('input', () => { myBrushSize = parseInt(brushSize.value, 10); });
 
-roomInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') joinBtn.click();
-});
 nameInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') joinBtn.click();
 });
